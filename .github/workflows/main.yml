@@ -53,10 +53,9 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           TAG: ${{ github.sha }}
         run: |
-          # Сборка 3-х сервисов проекта
-          docker build -t $REGISTRY/hive-com-control:$TAG -f src/CommunicationControl/DevOpsProject/Dockerfile .
-          docker build -t $REGISTRY/hive-map-client:$TAG -f src/MapClient/Dockerfile .
-          docker build -t $REGISTRY/hive-mind:$TAG -f src/CommunicationControl/DevOpsProject.HiveMind.API/Dockerfile .
+          docker build -t $REGISTRY/hive-com-control:$TAG -f src/CommunicationControl/DevOpsProject/Dockerfile src/CommunicationControl
+          docker build -t $REGISTRY/hive-map-client:$TAG -f src/MapClient/Dockerfile src/MapClient
+          docker build -t $REGISTRY/hive-mind:$TAG -f src/CommunicationControl/DevOpsProject.HiveMind.API/Dockerfile src/CommunicationControl
 
           docker push $REGISTRY/hive-com-control:$TAG
           docker push $REGISTRY/hive-map-client:$TAG
@@ -75,10 +74,8 @@ jobs:
           script: |
             cd ~/hive-emulator
 
-            # Авторизация в ECR на сервере
             aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ needs.build-and-push.outputs.registry }}
 
-            # Определение портов для Git Flow
             if [ "${{ github.ref }}" == "refs/heads/main" ]; then
               export COM_PORT=8080
               export MAP_PORT=3000
@@ -94,5 +91,4 @@ jobs:
             export REGISTRY=${{ needs.build-and-push.outputs.registry }}
             export TAG=${{ github.sha }}
 
-            # Запуск
             docker-compose -p $PROJ_NAME up -d --pull always
