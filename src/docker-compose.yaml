@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  communication-control:
+    build:
+      context: ./CommunicationControl/DevOpsProject
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    environment:
+      - Redis__ConnectionString=redis:6379
+    restart: unless-stopped
+
+  map-client:
+    build:
+      context: ./MapClient
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - communication-control
+    restart: unless-stopped
+
+  hive-mind:
+    build:
+      context: ./CommunicationControl/DevOpsProject.HiveMind.API
+      dockerfile: Dockerfile
+    ports:
+      - "5149:5149"
+    depends_on:
+      - redis
+      - communication-control
+    environment:
+      - Redis__ConnectionString=redis:6379
+      - CommunicationConfiguration__CommunicationControlIP=communication-control
+      - CommunicationConfiguration__HiveIP=hive-mind
+      - CommunicationConfiguration__CommunicationControlPort=8080
+      - CommunicationConfiguration__HivePort=5149
+    restart: unless-stopped
