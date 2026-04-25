@@ -85,7 +85,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/hive-emulator
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin 876128526576.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ needs.build-and-push.outputs.registry }}
 
             if [ "${{ github.ref }}" == "refs/heads/main" ]; then
               export COM_PORT=8080
@@ -99,7 +99,7 @@ jobs:
               export PROJ_NAME="dev"
             fi
 
-            export REGISTRY="876128526576.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
+            export REGISTRY=${{ needs.build-and-push.outputs.registry }}
             export TAG=${{ github.sha }}
 
             docker-compose -p $PROJ_NAME up -d --pull always
