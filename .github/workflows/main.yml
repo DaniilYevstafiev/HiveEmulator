@@ -65,11 +65,11 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           TAG: ${{ github.sha }}
         run: |
-          docker build -t $REGISTRY/hive-com-control:$TAG -f src/CommunicationControl/DevOpsProject/Dockerfile src/CommunicationControl/DevOpsProject
+          docker build -t $REGISTRY/communication-control:$TAG -f src/CommunicationControl/DevOpsProject/Dockerfile src/CommunicationControl/DevOpsProject
           docker build -t $REGISTRY/hive-mind:$TAG -f src/CommunicationControl/DevOpsProject.HiveMind.API/Dockerfile src/CommunicationControl/DevOpsProject.HiveMind.API
           docker build -t $REGISTRY/hive-map-client:$TAG -f src/MapClient/Dockerfile src/MapClient
 
-          docker push $REGISTRY/hive-com-control:$TAG
+          docker push $REGISTRY/communication-control:$TAG
           docker push $REGISTRY/hive-mind:$TAG
           docker push $REGISTRY/hive-map-client:$TAG
 
