@@ -43,14 +43,11 @@ services:
     environment:
       - Redis__ConnectionString=redis:6379
       - CommunicationConfiguration__CommunicationControlIP=communication-control
-      - CommunicationConfiguration__HiveIP=hive-mind
-      - CommunicationConfiguration__CommunicationControlPort=8080
-      - CommunicationConfiguration__HivePort=5149
     restart: unless-stopped
     networks:
       - hive-network
 
-    prometheus:
+  prometheus:
     image: prom/prometheus:latest
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
