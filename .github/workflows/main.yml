@@ -77,15 +77,26 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Copy docker-compose and monitoring configs to VPS
+      - name: Copy docker-compose
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "src/docker-compose.yaml,monitoring/"
+          source: "src/docker-compose.yaml"
+          target: "/home/ec2-user/hive-emulator/"
+          strip_components: 1
+
+      - name: Copy monitoring configs
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "monitoring/"
           target: "/home/ec2-user/hive-emulator/"
 
       - name: SSH Deploy to VPS
@@ -115,5 +126,4 @@ jobs:
             fi
 
             sudo -E docker-compose -p $PROJ_NAME down
-
             sudo -E docker-compose -p $PROJ_NAME up -d --pull always
