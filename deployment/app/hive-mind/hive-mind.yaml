@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-mind
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive-mind
+  template:
+    metadata:
+      labels:
+        app: hive-mind
+    spec:
+      containers:
+        - name: hive-mind
+          image: 876128526576.dkr.ecr.us-east-1.amazonaws.com/hiveemulator/hive-mind:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            - name: ASPNETCORE_URLS
+              value: "http://+:80"
+            - name: CommunicationConfiguration__CommunicationControlIP
+              value: "com-control"
+            - name: CommunicationConfiguration__CommunicationControlPort
+              value: "8080"
+            - name: CommunicationConfiguration__HiveIP
+              value: "hive-mind-service"
+            - name: CommunicationConfiguration__HivePort
+              value: "80"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-mind-service
+spec:
+  selector:
+    app: hive-mind
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
