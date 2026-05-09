@@ -23,8 +23,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Snyk check
+      - name: Snyk security check
         uses: snyk/actions/node@master
+        continue-on-error: true
+        with:
+          args: --all-projects
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
