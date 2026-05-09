@@ -38,8 +38,8 @@ jobs:
 
       - name: Build and Publish .NET Applications
         run: |
-          dotnet publish ./src/CommunicationControl/DevOpsProject/DevOpsProject.csproj -c Release -o ./src/CommunicationControl/DevOpsProject/published
-          dotnet publish ./src/CommunicationControl/DevOpsProject.HiveMind.API/DevOpsProject.HiveMind.API.csproj -c Release -o ./src/CommunicationControl/DevOpsProject.HiveMind.API/published
+          dotnet publish src/CommunicationControl/DevOpsProject -c Release -o src/CommunicationControl/DevOpsProject/published
+          dotnet publish src/CommunicationControl/DevOpsProject.HiveMind.API -c Release -o src/CommunicationControl/DevOpsProject.HiveMind.API/published
 
       - name: Build Frontend Assets
         run: |
