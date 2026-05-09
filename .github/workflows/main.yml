@@ -1,129 +1,61 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline HiveEmulator
 
 on:
   push:
-    branches: [main, dev]
-  workflow_dispatch:
+    branches: ["main"]
 
 jobs:
-  sast:
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
-      - name: Restore packages
-        run: dotnet restore src/CommunicationControl/DevOpsProject.sln
-
-      - name: Setup Snyk
-        uses: snyk/actions/setup@master
-
-      - name: Snyk Security Check
-        run: snyk test --all-projects
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-  build-and-push:
-    needs: sast
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    outputs:
-      registry: ${{ steps.login-ecr.outputs.registry }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-      - run: |
-          dotnet build src/CommunicationControl/DevOpsProject.sln -c Release
-          dotnet test src/CommunicationControl/DevOpsProject.sln -c Release --no-build
-          dotnet publish src/CommunicationControl/DevOpsProject/DevOpsProject.CommunicationControl.API.csproj -c Release -o src/CommunicationControl/DevOpsProject/published
-          dotnet publish src/CommunicationControl/DevOpsProject.HiveMind.API/DevOpsProject.HiveMind.API.csproj -c Release -o src/CommunicationControl/DevOpsProject.HiveMind.API/published
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - run: |
-          cd src/MapClient
-          npm install
-          npm run build
-
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      - id: login-ecr
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and Push
+      - name: Snyk check
+        uses: snyk/actions/node@master
         env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          TAG: ${{ github.sha }}
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Build, tag, and push images to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          docker build -t $REGISTRY/hiveemulator/communication-control:$TAG -f src/CommunicationControl/DevOpsProject/Dockerfile src/CommunicationControl/DevOpsProject
-          docker build -t $REGISTRY/hiveemulator/hive-mind:$TAG -f src/CommunicationControl/DevOpsProject.HiveMind.API/Dockerfile src/CommunicationControl/DevOpsProject.HiveMind.API
-          docker build -t $REGISTRY/hiveemulator/map-client:$TAG -f src/MapClient/Dockerfile src/MapClient
+          docker build -t $ECR_REGISTRY/hiveemulator/communication-control:latest ./src/CommunicationControl/DevOpsProject
+          docker push $ECR_REGISTRY/hiveemulator/communication-control:latest
 
-          docker push $REGISTRY/hiveemulator/communication-control:$TAG
-          docker push $REGISTRY/hiveemulator/hive-mind:$TAG
-          docker push $REGISTRY/hiveemulator/map-client:$TAG
+          docker build -t $ECR_REGISTRY/hiveemulator/map-client:latest ./src/MapClient
+          docker push $ECR_REGISTRY/hiveemulator/map-client:latest
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+          docker build -t $ECR_REGISTRY/hiveemulator/hive-mind:latest ./src/CommunicationControl/DevOpsProject.HiveMind.API
+          docker push $ECR_REGISTRY/hiveemulator/hive-mind:latest
 
-      - name: Copy docker-compose
-        uses: appleboy/scp-action@master
+      - name: Set Kubernetes context
+        uses: azure/k8s-set-context@v3
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "src/docker-compose.yaml"
-          target: "/home/ec2-user/hive-emulator/"
-          strip_components: 1
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
 
-      - name: Copy monitoring configs
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "monitoring/"
-          target: "/home/ec2-user/hive-emulator/"
+      - name: Deploy to EKS
+        run: |
+          kubectl apply -f deployment/infrastructure/redis/
+          kubectl apply -f deployment/infrastructure/ingress/
 
-      - name: SSH Deploy to VPS
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd ~/hive-emulator
+          kubectl apply -f deployment/app/communication-control/
+          kubectl apply -f deployment/app/map-client/
+          kubectl apply -f deployment/app/hive-mind/
 
-            export REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
-            export TAG=${{ github.sha }}
-
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | sudo docker login --username AWS --password-stdin $REGISTRY
-
-            if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-              export COM_PORT=8080
-              export MAP_PORT=3000
-              export HIVE_PORT=5149
-              export PROJ_NAME="prod"
-            else
-              export COM_PORT=8081
-              export MAP_PORT=3001
-              export HIVE_PORT=5150
-              export PROJ_NAME="dev"
-            fi
-
-            sudo -E docker-compose -p $PROJ_NAME down
-            sudo -E docker-compose -p $PROJ_NAME up -d --pull always
+          kubectl rollout restart deployment/com-control
+          kubectl rollout restart deployment/map-client
+          kubectl rollout restart deployment/hive-mind
